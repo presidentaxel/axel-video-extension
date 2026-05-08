@@ -32,7 +32,10 @@ async function pushContentVideoEntries(tabId, payload) {
   const firstVideo = payload.videos.find((video) => typeof video === "object") || {};
   tabMetaByTab.set(tabId, {
     title: payload.title || "",
-    poster: firstVideo.poster || "",
+    pageTitle: payload.pageMeta?.title || payload.title || "",
+    pageImage: payload.pageMeta?.image || "",
+    poster: firstVideo.poster || payload.pageMeta?.image || "",
+    previewFrame: firstVideo.previewFrame || "",
     duration: Number(firstVideo.duration) || 0,
     qualityLabel:
       firstVideo.videoHeight && Number.isFinite(Number(firstVideo.videoHeight))

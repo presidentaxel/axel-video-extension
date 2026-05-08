@@ -158,5 +158,23 @@ describe("media core", () => {
     expect(cards[0].thumbnailUrl).toBe("https://img/thumb.jpg");
     expect(cards[0].durationLabel).toBe("03:05");
     expect(cards[0].filename).toContain("720p");
+    expect(cards[0].variants.length).toBe(2);
+    expect(cards[0].variants[0].qualityLabel).toBe("720p");
+  });
+
+  it("ignores weak title hints and falls back to page title", () => {
+    const raw = [
+      createMediaEntry({
+        tabId: 1,
+        url: "https://host/stream/name/a.mp4"
+      })
+    ];
+    const cards = buildDisplayEntries(raw, {
+      pageTitle: "Methodology proposal | Platform",
+      duration: 91
+    });
+    expect(cards).toHaveLength(1);
+    expect(cards[0].title).toBe("Methodology proposal");
+    expect(cards[0].durationLabel).toBe("01:31");
   });
 });

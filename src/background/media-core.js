@@ -7,12 +7,33 @@ export function parseKalturaLikeMetadata(url) {
   const flavorMatch = decoded.match(/\/flavorId\/([^/]+)/i);
   const nameMatch = decoded.match(/\/name\/([^/]+)/i);
   const qualityMatch = decoded.match(/(\d{3,4})p/i);
+  const heightMatch = decoded.match(/\/h\/(\d{3,4})/i);
+  const widthMatch = decoded.match(/\/w\/(\d{3,4})/i);
+  const host = (() => {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return "";
+    }
+  })();
+
+  const rawName = nameMatch?.[1] || "";
+  const cleanedName = rawName
+    .replace(/\.(mp4|m3u8|webm)$/i, "")
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const bestQuality = qualityMatch?.[1] || heightMatch?.[1] || "";
 
   return {
     mediaKey: entryMatch?.[1] || "",
     flavorId: flavorMatch?.[1] || "",
-    titleHint: nameMatch?.[1] ? nameMatch[1].replace(/\.(mp4|m3u8|webm)$/i, "") : "",
-    qualityLabel: qualityMatch?.[1] ? `${qualityMatch[1]}p` : ""
+    titleHint: cleanedName,
+    qualityLabel: bestQuality ? `${bestQuality}p` : "",
+    host,
+    width: widthMatch?.[1] ? Number(widthMatch[1]) : 0,
+    height: heightMatch?.[1] ? Number(heightMatch[1]) : 0
   };
 }
 
@@ -30,6 +51,9 @@ export function createMediaEntry({ tabId, url, initiator, method, type }) {
     resourceType: normalizedType,
     qualityLabel: parsed.qualityLabel || "",
     titleHint: parsed.titleHint || "",
+    host: parsed.host || "",
+    width: parsed.width || 0,
+    height: parsed.height || 0,
     detectedAt: new Date().toISOString()
   };
 }
@@ -225,26 +249,88 @@ export function formatDuration(seconds) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function cleanTitle(value) {
+  if (!value) {
+    return "";
+  }
+  return value
+    .replace(/\s*[-|]\s*.*$/g, "")
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isUsefulTitle(value) {
+  if (!value) {
+    return false;
+  }
+  const lowered = value.toLowerCase();
+  if (value.length < 4) {
+    return false;
+  }
+  return !["video", "untitled video", "index", "a", "media"].includes(lowered);
+}
+
+function buildGroupKey(entry) {
+  if (entry.mediaKey) {
+    return `entry:${entry.mediaKey}`;
+  }
+
+  const parsed = parseKalturaLikeMetadata(entry.url);
+  if (parsed.mediaKey) {
+    return `entry:${parsed.mediaKey}`;
+  }
+
+  try {
+    const url = new URL(entry.url);
+    const pathname = url.pathname
+      .replace(/\/flavorId\/[^/]+/i, "")
+      .replace(/\/name\/[^/]+/i, "");
+    return `${url.hostname}${pathname}`;
+  } catch {
+    return entry.url.split("?")[0];
+  }
+}
+
 export function buildDisplayEntries(rawEntries, tabMeta = {}) {
   const byKey = new Map();
 
   for (const entry of rawEntries) {
     const parsed = parseKalturaLikeMetadata(entry.url);
-    const key = entry.mediaKey || parsed.mediaKey || entry.url.split("?")[0];
+    const key = buildGroupKey(entry);
     const quality = entry.qualityLabel || parsed.qualityLabel || "";
     const titleHint = entry.titleHint || parsed.titleHint || "";
+    const variantUrl = entry.url;
+    const variantQuality = quality || "auto";
+    const variantId = entry.flavorId || parsed.flavorId || variantUrl;
     const current = byKey.get(key);
 
     if (!current) {
+      const variants = new Map();
+      variants.set(variantId, {
+        id: variantId,
+        url: variantUrl,
+        qualityLabel: variantQuality
+      });
       byKey.set(key, {
         mediaKey: key,
         titleHint,
         qualityLabel: quality,
         bestUrl: entry.url,
         resourceType: entry.resourceType,
-        detectedAt: entry.detectedAt
+        detectedAt: entry.detectedAt,
+        host: entry.host || parsed.host || "",
+        variants
       });
       continue;
+    }
+
+    if (!current.variants.has(variantId)) {
+      current.variants.set(variantId, {
+        id: variantId,
+        url: variantUrl,
+        qualityLabel: variantQuality
+      });
     }
 
     const currentScore = qualityScore(current.qualityLabel);
@@ -259,14 +345,27 @@ export function buildDisplayEntries(rawEntries, tabMeta = {}) {
     }
   }
 
-  const titleFromPage = tabMeta.title || "";
-  const posterFromPage = tabMeta.poster || "";
+  const titleFromPage = cleanTitle(tabMeta.pageTitle || tabMeta.title || "");
+  const posterFromPage = tabMeta.poster || tabMeta.previewFrame || tabMeta.pageImage || "";
   const durationFromPage = tabMeta.duration || 0;
 
-  return Array.from(byKey.values()).map((item) => {
-    const displayTitle = item.titleHint || titleFromPage || "Untitled video";
+  const cards = Array.from(byKey.values()).map((item) => {
+    const candidateTitles = [cleanTitle(item.titleHint), titleFromPage, "Untitled video"];
+    const displayTitle = candidateTitles.find(isUsefulTitle) || "Untitled video";
     const qualityLabel = item.qualityLabel || tabMeta.qualityLabel || "auto";
-    const filename = buildOutputNameFromMetadata({
+    const variants = Array.from(item.variants.values())
+      .sort((a, b) => qualityScore(b.qualityLabel) - qualityScore(a.qualityLabel))
+      .map((variant) => ({
+        ...variant,
+        filename: buildOutputNameFromMetadata({
+          title: displayTitle,
+          qualityLabel: variant.qualityLabel,
+          fallbackUrl: variant.url
+        })
+      }));
+
+    const bestVariant = variants[0];
+    const filename = bestVariant?.filename || buildOutputNameFromMetadata({
       title: displayTitle,
       qualityLabel,
       fallbackUrl: item.bestUrl
@@ -278,10 +377,19 @@ export function buildDisplayEntries(rawEntries, tabMeta = {}) {
       qualityLabel,
       durationLabel: formatDuration(durationFromPage),
       thumbnailUrl: posterFromPage,
-      sourceUrl: item.bestUrl,
+      sourceUrl: bestVariant?.url || item.bestUrl,
       filename,
+      variants,
       detectedAt: item.detectedAt
     };
   });
+
+  // If multiple cards leak for the same page, keep the most relevant one.
+  if (cards.length <= 1) {
+    return cards;
+  }
+
+  const sorted = [...cards].sort((a, b) => qualityScore(b.qualityLabel) - qualityScore(a.qualityLabel));
+  return [sorted[0]];
 }
 

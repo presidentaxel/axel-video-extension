@@ -9,11 +9,11 @@ function renderItems(items) {
   mediaListNode.innerHTML = "";
 
   if (!items.length) {
-    statusNode.textContent = "No media detected on this tab yet.";
+    statusNode.textContent = "Aucune video detectee sur cet onglet.";
     return;
   }
 
-  statusNode.textContent = `${items.length} media item(s) detected.`;
+  statusNode.textContent = `${items.length} video detectee${items.length > 1 ? "s" : ""}.`;
   const fragment = document.createDocumentFragment();
 
   for (const item of items) {
@@ -21,10 +21,25 @@ function renderItems(items) {
     li.className = "popup__item";
     const thumb = item.thumbnailUrl
       ? `<img class="popup__thumb-img" src="${escapeHtml(item.thumbnailUrl)}" alt="thumbnail" />`
-      : `<div class="popup__thumb-empty">No preview</div>`;
+      : `<div class="popup__thumb-empty">Preview</div>`;
     const durationBadge = item.durationLabel
       ? `<span class="popup__duration">${escapeHtml(item.durationLabel)}</span>`
       : "";
+    const variants = Array.isArray(item.variants) && item.variants.length ? item.variants : [];
+    const optionsMarkup = variants
+      .map(
+        (variant, index) => `
+          <option
+            value="${escapeHtml(variant.url)}"
+            data-filename="${escapeHtml(variant.filename || item.filename || "")}"
+            ${index === 0 ? "selected" : ""}
+          >
+            ${escapeHtml(variant.qualityLabel || "auto")}
+          </option>
+        `
+      )
+      .join("");
+
     li.innerHTML = `
       <div class="popup__card">
         <div class="popup__thumb">
@@ -38,13 +53,16 @@ function renderItems(items) {
             <span class="popup__badge">${escapeHtml(item.qualityLabel || "auto")}</span>
           </div>
           <div class="popup__actions">
+            <select class="popup__quality-select" aria-label="Qualite">
+              ${optionsMarkup || '<option value="">auto</option>'}
+            </select>
             <button
               class="popup__download-btn"
               data-url="${escapeHtml(item.sourceUrl)}"
               data-filename="${escapeHtml(item.filename || "")}"
               type="button"
             >
-              Telecharger
+              Télécharger
             </button>
           </div>
         </div>
@@ -70,7 +88,7 @@ async function loadMediaEntries() {
   });
 
   if (!response?.ok) {
-    statusNode.textContent = "Failed to load media entries.";
+    statusNode.textContent = "Impossible de charger les videos.";
     return;
   }
 
@@ -84,27 +102,40 @@ async function handleDownloadClick(event) {
   }
 
   const url = button.dataset.url;
-  const filename = button.dataset.filename || "";
-  if (!url) {
+  let filename = button.dataset.filename || "";
+  const row = button.closest(".popup__item");
+  const qualitySelect = row?.querySelector(".popup__quality-select");
+  const selectedOption = qualitySelect?.selectedOptions?.[0];
+  const selectedUrl = selectedOption?.value;
+  if (selectedUrl) {
+    button.dataset.url = selectedUrl;
+  }
+  if (selectedOption?.dataset?.filename) {
+    filename = selectedOption.dataset.filename;
+    button.dataset.filename = filename;
+  }
+
+  const targetUrl = button.dataset.url;
+  if (!targetUrl) {
     return;
   }
 
-  statusNode.textContent = "Preparing download...";
+  statusNode.textContent = "Preparation du telechargement...";
   button.disabled = true;
 
   try {
     const response = await chrome.runtime.sendMessage({
       type: MESSAGE_TYPES.DOWNLOAD_MEDIA,
-      payload: { url, filename }
+      payload: { url: targetUrl, filename }
     });
     if (!response?.ok) {
-      statusNode.textContent = response?.error || "Download failed.";
+      statusNode.textContent = response?.error || "Telechargement echoue.";
       return;
     }
     const modeLabel = response?.data?.mode === "reconstructed" ? "reconstructed MP4" : "direct";
-    statusNode.textContent = `Download started (${modeLabel}).`;
+    statusNode.textContent = `Telechargement lance (${modeLabel}).`;
   } catch (error) {
-    statusNode.textContent = error?.message || "Download failed.";
+    statusNode.textContent = error?.message || "Telechargement echoue.";
   } finally {
     button.disabled = false;
   }
