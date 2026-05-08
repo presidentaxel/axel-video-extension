@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Axel Video Extension",
+  "description": "Detect and manage downloadable media streams from browser activity.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Axel Video Extension",
+    "default_popup": "src/popup/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "options_page": "src/options/options.html",
+  "permissions": [
+    "storage",
+    "tabs",
+    "downloads",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content/content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

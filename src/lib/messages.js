@@ -1,0 +1,12 @@
+export const MESSAGE_TYPES = Object.freeze({
+  GET_MEDIA_ENTRIES: "GET_MEDIA_ENTRIES",
+  MEDIA_ENTRIES_UPDATED: "MEDIA_ENTRIES_UPDATED",
+  CLEAR_MEDIA_ENTRIES: "CLEAR_MEDIA_ENTRIES",
+  UPDATE_SETTINGS: "UPDATE_SETTINGS",
+  GET_SETTINGS: "GET_SETTINGS",
+  DOWNLOAD_MEDIA: "DOWNLOAD_MEDIA"
+});
+
+export function isSupportedMessageType(type) {
+  return Object.values(MESSAGE_TYPES).includes(type);
+}

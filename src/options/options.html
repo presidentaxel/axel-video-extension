@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Axel Video Extension - Options</title>
+    <link rel="stylesheet" href="./options.css" />
+  </head>
+  <body>
+    <main class="options">
+      <h1>Extension settings</h1>
+      <form id="settingsForm">
+        <label for="maxItems">Max entries per tab</label>
+        <input id="maxItems" name="maxItems" type="number" min="1" max="500" required />
+
+        <label class="checkbox">
+          <input id="deduplicateByUrl" name="deduplicateByUrl" type="checkbox" />
+          Deduplicate entries by URL
+        </label>
+
+        <button type="submit">Save</button>
+      </form>
+      <p id="status" aria-live="polite"></p>
+    </main>
+    <script type="module" src="./options.js"></script>
+  </body>
+</html>

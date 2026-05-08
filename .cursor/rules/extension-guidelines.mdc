@@ -1,0 +1,41 @@
+---
+description: Standards projet Axel Video Extension
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Standards projet (toujours actifs)
+
+- Source de reference prioritaire: `docs/GUIDE_BONNES_PRATIQUES.md`.
+- En cas de doute ou de conflit, suivre ce guide avant les habitudes legacy.
+- Respecter la structure du repo:
+  - `src/background` pour l orchestration (detection reseau, telechargements, message bus).
+  - `src/content` pour la collecte cote page.
+  - `src/popup` et `src/options` pour l UI.
+  - `src/lib` pour les contrats et utilitaires partages.
+- Garder le service worker lisible: extraire la complexite dans des fonctions testables.
+- Centraliser les types de messages dans `src/lib/messages.js`.
+- Ne jamais exposer de secrets ni credentials dans le code extension.
+- Permissions Manifest: principe du moindre privilege, justifier chaque permission ajoutee.
+- Cote UX: garder un popup rapide, des erreurs explicites et des actions utilisateur claires.
+- Avant finalisation, verifier manuellement le flux extension sur `chrome://extensions`.
+- Commits/PR: expliquer le pourquoi, limiter le scope, suivre Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`).
+
+## Checklist rapide avant livraison
+
+- Changement minimal et aligne au guide.
+- Aucun secret dans code, logs ou fichiers versionnes.
+- Si permissions/host permissions touchees: perimetre revu et documente.
+- Si telechargement/reconstruction touche: verifier au moins un cas MP4 direct et un cas HLS.
+- README et docs mis a jour si comportement visible modifie.
+
+## Proposition de commit (obligatoire apres changement significatif)
+
+- Apres chaque changement significatif, proposer un message de commit Git.
+- Considerer significatif si au moins un critere est vrai:
+  - plusieurs fichiers modifies, ou
+  - changement de logique metier/comportement visible, ou
+  - impact securite/permissions/telechargement, ou
+  - refactor non trivial.
+- Format recommande: Conventional Commits + description courte orientee pourquoi.

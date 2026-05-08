@@ -1,0 +1,60 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, Segoe UI, Roboto, sans-serif;
+}
+
+body {
+  margin: 0;
+  width: 380px;
+  min-height: 320px;
+}
+
+.popup {
+  padding: 12px;
+}
+
+.popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.popup__header h1 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.popup__status {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.popup__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.popup__item {
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.popup__url {
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.popup__actions {
+  margin-top: 8px;
+}
+
+.popup__download-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Axel Video Extension</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="popup__header">
+        <h1>Detected media</h1>
+        <button id="clearBtn" type="button">Clear</button>
+      </header>
+
+      <p id="status" class="popup__status">Loading...</p>
+      <ul id="mediaList" class="popup__list"></ul>
+    </main>
+
+    <script type="module" src="./popup.js"></script>
+  </body>
+</html>
