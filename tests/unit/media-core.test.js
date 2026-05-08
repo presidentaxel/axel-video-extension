@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   arrayBufferToBase64,
+  buildDisplayEntries,
+  buildOutputNameFromMetadata,
   buildDataUrlFromBuffers,
   buildOutputName,
   createMediaEntry,
@@ -26,6 +28,13 @@ describe("media core", () => {
   it("sanitizes output filename", () => {
     expect(sanitizeFileName('a<>:"/\\|?*b')).toBe("a_________b");
     expect(buildOutputName("https://x/video.m3u8?token=1")).toBe("video.mp4");
+    expect(
+      buildOutputNameFromMetadata({
+        title: "My Dissertation Video",
+        qualityLabel: "720p",
+        fallbackUrl: "https://x/video.mp4"
+      })
+    ).toBe("My Dissertation Video_720p.mp4");
   });
 
   it("parses manifest segments to absolute urls", () => {
@@ -66,6 +75,7 @@ describe("media core", () => {
     const b = new TextEncoder().encode("b").buffer;
     const dataUrl = buildDataUrlFromBuffers([a, b]);
     expect(dataUrl.startsWith("data:video/mp4;base64,")).toBe(true);
+    expect(dataUrl.endsWith("YWI=")).toBe(true);
     expect(arrayBufferToBase64(a)).toBe("YQ==");
   });
 
@@ -77,6 +87,27 @@ describe("media core", () => {
     });
     expect(result.mode).toBe("direct");
     expect(download).toHaveBeenCalledOnce();
+    expect(download.mock.calls[0][0].saveAs).toBe(false);
+  });
+
+  it("falls back to fetched bytes when direct download fails", async () => {
+    const download = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("blocked"))
+      .mockResolvedValueOnce(123);
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new TextEncoder().encode("hello").buffer
+    }));
+
+    const result = await downloadMedia("https://cdn/protected.mp4", {
+      downloadsApi: { download },
+      fetchImpl
+    });
+
+    expect(result.mode).toBe("direct-fallback");
+    expect(download).toHaveBeenCalledTimes(2);
+    expect(download.mock.calls[1][0].url.startsWith("data:video/mp4;base64,")).toBe(true);
   });
 
   it("reconstructs hls and downloads data url", async () => {
@@ -102,5 +133,30 @@ describe("media core", () => {
     expect(result.segmentCount).toBe(2);
     expect(download).toHaveBeenCalledOnce();
     expect(download.mock.calls[0][0].url.startsWith("data:video/mp4;base64,")).toBe(true);
+  });
+
+  it("builds single display card from duplicate entries", () => {
+    const raw = [
+      createMediaEntry({
+        tabId: 1,
+        url: "https://host/scf/hls/entryId/abc/flavorId/one/name/Test.Video.360p.mp4"
+      }),
+      createMediaEntry({
+        tabId: 1,
+        url: "https://host/scf/hls/entryId/abc/flavorId/two/name/Test.Video.720p.mp4"
+      })
+    ];
+
+    const cards = buildDisplayEntries(raw, {
+      title: "Fallback Title",
+      poster: "https://img/thumb.jpg",
+      duration: 185
+    });
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0].qualityLabel).toBe("720p");
+    expect(cards[0].thumbnailUrl).toBe("https://img/thumb.jpg");
+    expect(cards[0].durationLabel).toBe("03:05");
+    expect(cards[0].filename).toContain("720p");
   });
 });

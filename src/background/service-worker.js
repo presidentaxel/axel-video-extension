@@ -1,12 +1,14 @@
 import { MESSAGE_TYPES } from "../lib/messages.js";
 import { getSettings, setSettings } from "../lib/storage.js";
 import {
+  buildDisplayEntries,
   createMediaEntry,
   downloadMedia,
   isCandidateMediaRequest
 } from "./media-core.js";
 
 const mediaByTab = new Map();
+const tabMetaByTab = new Map();
 
 async function pushContentVideoEntries(tabId, payload) {
   if (!payload || !Array.isArray(payload.videos)) {
@@ -26,6 +28,17 @@ async function pushContentVideoEntries(tabId, payload) {
         type: "media"
       })
     );
+
+  const firstVideo = payload.videos.find((video) => typeof video === "object") || {};
+  tabMetaByTab.set(tabId, {
+    title: payload.title || "",
+    poster: firstVideo.poster || "",
+    duration: Number(firstVideo.duration) || 0,
+    qualityLabel:
+      firstVideo.videoHeight && Number.isFinite(Number(firstVideo.videoHeight))
+        ? `${Math.round(Number(firstVideo.videoHeight))}p`
+        : ""
+  });
 
   const merged = [...fromPage, ...list];
   const deduped = settings.deduplicateByUrl
@@ -70,6 +83,7 @@ chrome.webRequest.onCompleted.addListener(
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   mediaByTab.delete(tabId);
+  tabMetaByTab.delete(tabId);
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -78,9 +92,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (type === MESSAGE_TYPES.GET_MEDIA_ENTRIES) {
       const tabId = sender.tab?.id ?? message?.tabId ?? -1;
+      const rawEntries = mediaByTab.get(tabId) || [];
+      const tabMeta = tabMetaByTab.get(tabId) || {};
       sendResponse({
         ok: true,
-        data: mediaByTab.get(tabId) || []
+        data: buildDisplayEntries(rawEntries, tabMeta)
       });
       return;
     }
@@ -88,6 +104,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (type === MESSAGE_TYPES.CLEAR_MEDIA_ENTRIES) {
       const tabId = sender.tab?.id ?? message?.tabId ?? -1;
       mediaByTab.set(tabId, []);
+      tabMetaByTab.delete(tabId);
       sendResponse({ ok: true });
       return;
     }
@@ -113,13 +130,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (type === MESSAGE_TYPES.DOWNLOAD_MEDIA) {
       const targetUrl = message?.payload?.url;
+      const preferredFilename = message?.payload?.filename || "";
       if (!targetUrl || typeof targetUrl !== "string") {
         sendResponse({ ok: false, error: "Invalid media URL." });
         return;
       }
       const result = await downloadMedia(targetUrl, {
         downloadsApi: chrome.downloads,
-        fetchImpl: fetch
+        fetchImpl: fetch,
+        preferredFilename
       });
       sendResponse({ ok: true, data: result });
       return;

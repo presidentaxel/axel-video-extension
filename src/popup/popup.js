@@ -19,15 +19,37 @@ function renderItems(items) {
   for (const item of items) {
     const li = document.createElement("li");
     li.className = "popup__item";
+    const thumb = item.thumbnailUrl
+      ? `<img class="popup__thumb-img" src="${escapeHtml(item.thumbnailUrl)}" alt="thumbnail" />`
+      : `<div class="popup__thumb-empty">No preview</div>`;
+    const durationBadge = item.durationLabel
+      ? `<span class="popup__duration">${escapeHtml(item.durationLabel)}</span>`
+      : "";
     li.innerHTML = `
-      <div><strong>${item.resourceType || "media"}</strong></div>
-      <div class="popup__url">${escapeHtml(item.url)}</div>
-      <div>${new Date(item.detectedAt).toLocaleString()}</div>
-      <div class="popup__actions">
-        <button class="popup__download-btn" data-url="${escapeHtml(item.url)}" type="button">
-          Download MP4
-        </button>
+      <div class="popup__card">
+        <div class="popup__thumb">
+          ${thumb}
+          ${durationBadge}
+        </div>
+        <div class="popup__meta">
+          <div class="popup__title">${escapeHtml(item.title || "Untitled video")}</div>
+          <div class="popup__badges">
+            <span class="popup__badge">MP4</span>
+            <span class="popup__badge">${escapeHtml(item.qualityLabel || "auto")}</span>
+          </div>
+          <div class="popup__actions">
+            <button
+              class="popup__download-btn"
+              data-url="${escapeHtml(item.sourceUrl)}"
+              data-filename="${escapeHtml(item.filename || "")}"
+              type="button"
+            >
+              Telecharger
+            </button>
+          </div>
+        </div>
       </div>
+      <div class="popup__date">${new Date(item.detectedAt).toLocaleString()}</div>
     `;
     fragment.appendChild(li);
   }
@@ -62,6 +84,7 @@ async function handleDownloadClick(event) {
   }
 
   const url = button.dataset.url;
+  const filename = button.dataset.filename || "";
   if (!url) {
     return;
   }
@@ -72,7 +95,7 @@ async function handleDownloadClick(event) {
   try {
     const response = await chrome.runtime.sendMessage({
       type: MESSAGE_TYPES.DOWNLOAD_MEDIA,
-      payload: { url }
+      payload: { url, filename }
     });
     if (!response?.ok) {
       statusNode.textContent = response?.error || "Download failed.";
