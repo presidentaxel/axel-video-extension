@@ -80,12 +80,34 @@ axel-video-extension/
 
 ---
 
+## Tests (batterie renforcee)
+
+### JavaScript (Vitest + coverage)
+
+- Installer deps: `npm install`
+- Lancer tous les tests: `npm run test`
+- Coverage HTML: `coverage/index.html`
+
+### Python (Pytest dans venv)
+
+- Creation du venv + installation:
+  - PowerShell: `.\scripts\setup_venv.ps1`
+- Lancer les tests Python:
+  - `.\.venv\Scripts\python.exe -m pytest tests/python -q`
+
+### Tout lancer en une commande
+
+- `.\scripts\run_all_tests.ps1`
+
+---
+
 ## Limites actuelles
 
 - La reconstruction HLS en MP4 est **best effort**:
   - fonctionne mieux sur des playlists/segments compatibles MP4 fragmentes
   - peut echouer selon DRM, CORS, tokens expires, ou format de segment non compatible
 - Pas de transcodage avance (pas de ffmpeg integre dans cette version)
+- En contexte service worker, `URL.createObjectURL` n est pas disponible. La V2 utilise un fallback Data URL pour finaliser le telechargement reconstruit.
 
 ---
 

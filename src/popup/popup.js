@@ -1,17 +1,9 @@
 import { MESSAGE_TYPES } from "../lib/messages.js";
+import { escapeHtml } from "./popup-helpers.js";
 
 const statusNode = document.getElementById("status");
 const mediaListNode = document.getElementById("mediaList");
 const clearBtn = document.getElementById("clearBtn");
-
-function escapeHtml(text) {
-  return String(text)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
 
 function renderItems(items) {
   mediaListNode.innerHTML = "";

@@ -110,6 +110,7 @@ Avant de coder, identifier ou vit la regle (service worker, content script, popu
 - Toute nouvelle feature doit preciser son module principal (background/content/popup/options).
 - Si une logique est complexe, creer un dossier dedie sous `src/` plutot que grossir un fichier unique.
 - Ajouter un court paragraphe d architecture dans `README.md` pour les gros changements.
+- Ajouter/mettre a jour des tests JS (Vitest) et, pour les verifications de structure/projet, des tests Python executes dans le venv.
 
 ---
 

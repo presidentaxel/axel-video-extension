@@ -1,29 +1,12 @@
 import { MESSAGE_TYPES } from "../lib/messages.js";
 import { getSettings, setSettings } from "../lib/storage.js";
+import {
+  createMediaEntry,
+  downloadMedia,
+  isCandidateMediaRequest
+} from "./media-core.js";
 
-const MEDIA_FILE_PATTERN = /\.(mp4|m4v|webm|m3u8|mp3|aac|wav)(\?.*)?$/i;
-const HLS_PATTERN = /\.m3u8(\?.*)?$/i;
 const mediaByTab = new Map();
-
-function createMediaEntry({ tabId, url, initiator, method, type }) {
-  const normalizedType = HLS_PATTERN.test(url) ? "hls" : type || "other";
-  return {
-    id: `${tabId}:${url}`,
-    tabId,
-    url,
-    initiator: initiator || "",
-    method: method || "GET",
-    resourceType: normalizedType,
-    detectedAt: new Date().toISOString()
-  };
-}
-
-function isCandidateMediaRequest(request) {
-  if (!request || !request.url) {
-    return false;
-  }
-  return MEDIA_FILE_PATTERN.test(request.url);
-}
 
 async function pushContentVideoEntries(tabId, payload) {
   if (!payload || !Array.isArray(payload.videos)) {
@@ -55,114 +38,6 @@ async function pushContentVideoEntries(tabId, payload) {
   mediaByTab.set(tabId, deduped.slice(0, settings.maxItems));
 }
 
-function toAbsoluteUrl(rawLine, baseUrl) {
-  try {
-    return new URL(rawLine, baseUrl).toString();
-  } catch {
-    return "";
-  }
-}
-
-function parseManifestSegments(manifestText, manifestUrl) {
-  return manifestText
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"))
-    .map((line) => toAbsoluteUrl(line, manifestUrl))
-    .filter(Boolean);
-}
-
-async function extractSegmentsFromManifest(manifestUrl, manifestText, depth = 0) {
-  const entries = parseManifestSegments(manifestText, manifestUrl);
-  if (!entries.length) {
-    return [];
-  }
-
-  const nestedPlaylist = entries.find((entry) => HLS_PATTERN.test(entry));
-  if (nestedPlaylist && depth < 2) {
-    const nestedResponse = await fetch(nestedPlaylist, { credentials: "include" });
-    if (!nestedResponse.ok) {
-      throw new Error(`Cannot fetch nested playlist (${nestedResponse.status}).`);
-    }
-    const nestedText = await nestedResponse.text();
-    return extractSegmentsFromManifest(nestedPlaylist, nestedText, depth + 1);
-  }
-
-  return entries.filter((entry) => !HLS_PATTERN.test(entry));
-}
-
-async function fetchAsArrayBuffer(url) {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) {
-    throw new Error(`Download failed (${response.status}) for ${url}`);
-  }
-  return response.arrayBuffer();
-}
-
-function sanitizeFileName(input) {
-  return input.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_").slice(0, 120);
-}
-
-function buildOutputName(url) {
-  const fromUrl = url.split("/").pop() || "video";
-  const noQuery = fromUrl.split("?")[0] || "video";
-  const stem = noQuery.replace(/\.(m3u8|mp4|m4v|webm)$/i, "");
-  return `${sanitizeFileName(stem || "video")}.mp4`;
-}
-
-async function downloadDirectUrl(url) {
-  const filename = buildOutputName(url);
-  const downloadId = await chrome.downloads.download({
-    url,
-    filename,
-    saveAs: true
-  });
-  return { downloadId, filename, mode: "direct" };
-}
-
-async function reconstructAndDownloadHls(manifestUrl) {
-  const manifestResponse = await fetch(manifestUrl, { credentials: "include" });
-  if (!manifestResponse.ok) {
-    throw new Error(`Cannot fetch manifest (${manifestResponse.status}).`);
-  }
-  const manifestText = await manifestResponse.text();
-  const segments = await extractSegmentsFromManifest(manifestUrl, manifestText);
-  if (!segments.length) {
-    throw new Error("No segments found in manifest.");
-  }
-
-  const buffers = [];
-  for (const segmentUrl of segments) {
-    buffers.push(await fetchAsArrayBuffer(segmentUrl));
-  }
-
-  const blob = new Blob(buffers, { type: "video/mp4" });
-  const blobUrl = URL.createObjectURL(blob);
-  const filename = buildOutputName(manifestUrl);
-
-  try {
-    const downloadId = await chrome.downloads.download({
-      url: blobUrl,
-      filename,
-      saveAs: true
-    });
-    return {
-      downloadId,
-      filename,
-      segmentCount: segments.length,
-      mode: "reconstructed"
-    };
-  } finally {
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-  }
-}
-
-async function downloadMedia(url) {
-  if (HLS_PATTERN.test(url)) {
-    return reconstructAndDownloadHls(url);
-  }
-  return downloadDirectUrl(url);
-}
 
 async function pushMediaEntry(request) {
   const tabId = typeof request.tabId === "number" ? request.tabId : -1;
@@ -242,7 +117,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: false, error: "Invalid media URL." });
         return;
       }
-      const result = await downloadMedia(targetUrl);
+      const result = await downloadMedia(targetUrl, {
+        downloadsApi: chrome.downloads,
+        fetchImpl: fetch
+      });
       sendResponse({ ok: true, data: result });
       return;
     }
